@@ -1,0 +1,64 @@
+layer_5 = function(factor_cols,ci_threshold = 0)
+{
+  library(caret)
+  file_names = list.files(path = 'Layer_4')
+  file_names = paste0('Layer_4/',file_names)
+  dir.create("Layer_5")
+  dir.create("Layer_5/Train")
+  dir.create("Layer_5/Test")
+  
+  i = 1
+  for(file1 in file_names)
+  {
+    data = read.csv(file1)
+    factor_cols = factor_cols[factor_cols %in% colnames(data)]
+    num_cols = colnames(data)
+    num_cols = num_cols[!num_cols %in% factor_cols] 
+    
+    data[factor_cols] = lapply(data[factor_cols], as.factor)
+    data[num_cols] = lapply(data[num_cols], as.numeric)
+    
+    trainrows=createDataPartition(data[[target]],p = .70,
+                                  list = FALSE)
+    train_data = data[trainrows,]
+    test_data = data[-trainrows,]
+    
+    write.csv(train_data,file = paste0("Layer_5/Train/train",i,"_ci_not_handled.csv"),row.names = FALSE)
+    write.csv(test_data,file = paste0("Layer_5/Test/test",i,"_ci_not_handled.csv"),row.names = FALSE)
+    i = i+1
+    
+    if(ci_threshold == 0)
+    {
+      ci_threshold = trunc((100 / nlevels(train_data[[target]]))/4)
+    }
+    
+    distribution = (table(train_data[[target]]) / nrow(train_data))*100
+    ci_check = distribution[distribution<ci_threshold]
+    if(length(ci_check)>0)
+    {
+      cols = colnames(train_data)
+      cols = cols[!cols%in%target]
+      
+      up_sample_data = upSample(x = subset(train_data, select = cols), 
+                                y = train_data[[target]], yname = target)
+      
+      req_rows = trunc((1 / nlevels(train_data[[target]])) * nrow(train_data))
+      
+      rename_cols = colnames(up_sample_data)
+      rename_cols = gsub(target,"target",rename_cols)
+      colnames(up_sample_data) = rename_cols
+      
+      up_sample_data = up_sample_data %>% group_by(target) %>% sample_n(size = req_rows)
+      
+      rename_cols = colnames(up_sample_data)
+      rename_cols = gsub("target",target,rename_cols)
+      colnames(up_sample_data) = rename_cols
+      
+      write.csv(up_sample_data,file = paste0("Layer_5/Train/train",i,"_up_sampled.csv"),row.names = FALSE)
+      write.csv(test_data,file = paste0("Layer_5/Test/test",i,"_up_sampled.csv"),row.names = FALSE)
+      i = i+1
+    }
+  }
+  print("train test split completed")
+}
+
